@@ -1,0 +1,133 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# Kwik Production Deployment Workflow
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# Triggers on push to main branch.
+# Runs on a self-hosted runner (configured on VPS).
+# Builds and deploys with zero-downtime symlink swap.
+#
+# Prerequisites on VPS:
+# 1. Deploy user 'kwikdeploy' exists
+# 2. GitHub runner installed and running as kwikdeploy
+# 3. Directories: /opt/kwik/{releases,shared}
+# 4. Sudoers rule for passwordless service restart
+# 5. Redis and MinIO running via docker-compose
+#
+# ═══════════════════════════════════════════════════════════════════════════
+
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # Manual trigger
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, linux, production]
+
+    env:
+      RELEASE_DIR: /opt/kwik/releases/${{ github.sha }}
+      CURRENT_LINK: /opt/kwik/current
+      SHARED_DIR: /opt/kwik/shared
+
+    steps:
+      # ─────────────────────────────────────────────────────────────
+      # CHECKOUT
+      # ─────────────────────────────────────────────────────────────
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ─────────────────────────────────────────────────────────────
+      # NODE SETUP
+      # ─────────────────────────────────────────────────────────────
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 9
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Cache pnpm dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      # ─────────────────────────────────────────────────────────────
+      # INSTALL & BUILD
+      # ─────────────────────────────────────────────────────────────
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build application
+        run: pnpm build
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
+          # Build-time env vars (non-secret)
+          NEXT_PUBLIC_APP_URL: https://kwik.gg
+
+      # ─────────────────────────────────────────────────────────────
+      # DEPLOY
+      # Atomic deployment via symlink swap
+      # ─────────────────────────────────────────────────────────────
+      - name: Create release directory
+        run: mkdir -p ${{ env.RELEASE_DIR }}
+
+      - name: Copy build artifacts
+        run: |
+          # Copy standalone build (includes server.js and minimal node_modules)
+          cp -r .next/standalone/* ${{ env.RELEASE_DIR }}/
+
+          # Copy static assets (not included in standalone by default)
+          mkdir -p ${{ env.RELEASE_DIR }}/.next/static
+          cp -r .next/static/* ${{ env.RELEASE_DIR }}/.next/static/
+
+          # Copy public folder
+          cp -r public ${{ env.RELEASE_DIR }}/public
+
+      - name: Link shared environment
+        run: |
+          # Symlink persistent .env from shared directory
+          ln -sf ${{ env.SHARED_DIR }}/.env ${{ env.RELEASE_DIR }}/.env
+
+      - name: Switch to new release
+        run: |
+          # Atomic symlink swap (ln -sfn is atomic on Linux)
+          ln -sfn ${{ env.RELEASE_DIR }} ${{ env.CURRENT_LINK }}
+
+      # ─────────────────────────────────────────────────────────────
+      # RESTART SERVICE
+      # Uses passwordless sudo (configured in /etc/sudoers.d/kwikdeploy)
+      # ─────────────────────────────────────────────────────────────
+      - name: Restart application
+        run: sudo systemctl restart kwik
+
+      - name: Wait for startup
+        run: sleep 5
+
+      - name: Health check
+        run: |
+          # Verify the app is responding
+          curl -sf http://localhost:3000 > /dev/null || exit 1
+          echo "✓ Application is healthy"
+
+      # ─────────────────────────────────────────────────────────────
+      # CLEANUP
+      # Keep only last 5 releases to save disk space
+      # ─────────────────────────────────────────────────────────────
+      - name: Cleanup old releases
+        run: |
+          cd /opt/kwik/releases
+          ls -t | tail -n +6 | xargs -r rm -rf
+          echo "✓ Cleaned up old releases"

@@ -1,0 +1,92 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# Kwik Production Docker Compose
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# This runs the supporting services (Redis + MinIO) on the production VPS.
+# The Next.js app runs via systemd, NOT in Docker.
+#
+# Usage:
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# Data is persisted in named volumes.
+# Services restart automatically on reboot.
+#
+# ═══════════════════════════════════════════════════════════════════════════
+
+services:
+  # ─────────────────────────────────────────────────────────────
+  # Redis - Metadata storage and stats
+  # ─────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: kwik-redis
+    ports:
+      - "127.0.0.1:6379:6379" # Bind to localhost only (security)
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ─────────────────────────────────────────────────────────────
+  # MinIO - S3-compatible object storage
+  # ─────────────────────────────────────────────────────────────
+  minio:
+    image: minio/minio:latest
+    container_name: kwik-minio
+    ports:
+      - "127.0.0.1:9000:9000" # S3 API (localhost only)
+      - "127.0.0.1:9001:9001" # Admin console (localhost only)
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ─────────────────────────────────────────────────────────────
+  # MinIO Init - Creates bucket on first startup
+  # ─────────────────────────────────────────────────────────────
+  minio-init:
+    image: minio/mc:latest
+    container_name: kwik-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD};
+      mc mb local/kwik-files --ignore-existing;
+      echo 'Bucket kwik-files ready';
+      exit 0;
+      "
+    restart: "no"
+
+volumes:
+  redis_data:
+    name: kwik-redis-data
+  minio_data:
+    name: kwik-minio-data

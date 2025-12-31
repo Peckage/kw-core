@@ -1,0 +1,225 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/**
+ * Kwik Theme Variables
+ *
+ * DARK MODE FIRST (v0.1):
+ * Kwik uses dark mode exclusively in this version.
+ * The :root variables are set to dark theme values directly.
+ * The .dark class is also defined for compatibility with shadcn/ui
+ * components that may check for it.
+ *
+ * Light mode is intentionally NOT implemented.
+ * This keeps the experience focused and consistent.
+ */
+
+@layer base {
+  /* Dark theme as default - Kwik is dark-mode-only in v0.1 */
+  :root {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 240 10% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 240 5.9% 10%;
+    --secondary: 240 3.7% 15.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 240 4.9% 83.9%;
+    --radius: 0.5rem;
+
+    /* Status colors for dark mode */
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 98%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 9%;
+  }
+
+  /* .dark class defined for shadcn/ui compatibility */
+  .dark {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 240 10% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 240 5.9% 10%;
+    --secondary: 240 3.7% 15.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 240 4.9% 83.9%;
+
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 98%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 9%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+}
+
+/* Custom utilities for Kwik */
+@layer utilities {
+  .drag-none {
+    -webkit-user-drag: none;
+    user-drag: none;
+  }
+}
+
+/**
+ * Micro-animations for Kwik
+ * 
+ * These are subtle, purposeful animations that improve perceived quality
+ * without being distracting. All durations are 150-250ms with ease-out.
+ */
+@layer utilities {
+  /* Fade in animation - used for page content appearance */
+  .animate-in {
+    animation: fadeIn 200ms ease-out;
+  }
+
+  /* Subtle scale on state change */
+  .animate-scale-in {
+    animation: scaleIn 200ms ease-out;
+  }
+
+  /* Success pulse - single subtle pulse for success states */
+  .animate-success {
+    animation: successPulse 400ms ease-out;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes successPulse {
+  0% {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/**
+ * Scroll-based reveal animations
+ * 
+ * These use CSS-only intersection observer behavior via scroll-timeline
+ * when supported, with graceful fallback to static display.
+ * 
+ * The reveal pattern:
+ * - Elements start slightly transparent and offset
+ * - As they enter viewport, they fade in and settle
+ * - Motion is subtle (4-8px translateY, 150-250ms duration)
+ * - Staggered delays create reading rhythm
+ */
+
+/* Base state for scroll-reveal elements */
+.scroll-reveal {
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 250ms ease-out, transform 250ms ease-out;
+}
+
+/* Revealed state - applied via JS intersection observer */
+.scroll-reveal.revealed {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Staggered reveal delays for grouped elements */
+.scroll-reveal-delay-1 {
+  transition-delay: 50ms;
+}
+.scroll-reveal-delay-2 {
+  transition-delay: 100ms;
+}
+.scroll-reveal-delay-3 {
+  transition-delay: 150ms;
+}
+.scroll-reveal-delay-4 {
+  transition-delay: 200ms;
+}
+.scroll-reveal-delay-5 {
+  transition-delay: 250ms;
+}
+
+/* Narrative section styling */
+.narrative-section {
+  @apply relative;
+}
+
+/* Subtle vertical connector line between sections */
+.narrative-connector {
+  @apply absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-gradient-to-b from-transparent via-border/30 to-transparent;
+  pointer-events: none;
+}
+
+/* Technical diagram styling */
+.diagram-box {
+  @apply rounded border border-border/40 bg-card/20 px-4 py-2 text-xs font-mono text-muted-foreground;
+}
+
+.diagram-arrow {
+  @apply text-muted-foreground/40;
+}
+
+/* Flow indicator dots */
+.flow-dot {
+  @apply h-1.5 w-1.5 rounded-full bg-muted-foreground/30;
+}
+
+.flow-dot-active {
+  @apply bg-primary/60;
+}
